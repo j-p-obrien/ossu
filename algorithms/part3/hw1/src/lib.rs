@@ -79,6 +79,21 @@ pub mod scheduling {
             job_list.sort_by(additive_order)
         }
 
+        pub fn schedule_jobs_optimal(&mut self) {
+            let JobList(job_list) = self;
+            
+            let optimal_order = |i: &Job, j: &Job| -> Ordering {
+                let i_priority = i.additive_priority();
+                let j_priority = j.additive_priority();
+
+                j_priority.cmp(&i_priority)
+            };
+
+            job_list.sort_by(optimal_order)
+        }
+
+        // Returns the completion times of the JobList. Accidentally implemented this instead
+        // of the weighted version. Whoops!
         pub fn completion_times(&self) -> Vec<u32> {
             let JobList(job_list) = self;
 
@@ -90,6 +105,22 @@ pub mod scheduling {
                 });
             completion_times.0
         }
+
+        // Returns the weighted completion times of the JobList.
+        pub fn weighted_completion_times(&self) -> Vec<u32> {
+            let JobList(job_list) = self;
+
+            // Note here that acc.0 is the weighted completion times, while acc.1 is the completion
+            // time of the last job.
+            let weighted_completion_times = job_list.iter()
+                .fold((vec![], 0), |mut acc, x| {
+                    acc.1 += x.length;
+                    acc.0.push(acc.1 * x.weight);
+                    acc
+                });
+            weighted_completion_times.0
+        }
+
     }
 }
 
@@ -141,13 +172,13 @@ mod tests {
     }
 
     #[test]
-    fn test_completion_times() {
-        let job_list = job_list_no_ties();
-        let no_ties_completions = vec![2, 6, 12];
-        assert_eq!(job_list.completion_times(), no_ties_completions);
-
+    fn test_weighted_completion_times() {
         let job_list = job_list_with_ties();
-        let completions = vec![2, 6, 12];
-        assert_eq!(job_list.completion_times(), completions);
+        let completions = vec![2, 18, 60];
+        assert_eq!(job_list.weighted_completion_times(), completions);
+
+        let job_list = job_list_no_ties();
+        let no_ties_completions = vec![0, 18, 72];
+        assert_eq!(job_list.weighted_completion_times(), no_ties_completions);
     }
 }
