@@ -79,17 +79,22 @@ pub mod scheduling {
             job_list.sort_by(additive_order)
         }
 
+        // Sorts Jobs by decreasing values of weight/length, the optimal ordering.
         pub fn schedule_jobs_optimal(&mut self) {
             let JobList(job_list) = self;
             
             let optimal_order = |i: &Job, j: &Job| -> Ordering {
-                let i_priority = i.additive_priority();
-                let j_priority = j.additive_priority();
+                let i_priority = i.multiplicative_priority();
+                let j_priority = j.multiplicative_priority();
 
-                j_priority.cmp(&i_priority)
+                if let Some(order) = j_priority.partial_cmp(&i_priority) {
+                    return order
+                } else {
+                    panic!("Prob some kind of division by 0 error.")
+                }
             };
 
-            job_list.sort_by(optimal_order)
+             job_list.sort_by(optimal_order) 
         }
 
         // Returns the completion times of the JobList. Accidentally implemented this instead
@@ -181,4 +186,26 @@ mod tests {
         let no_ties_completions = vec![0, 18, 72];
         assert_eq!(job_list.weighted_completion_times(), no_ties_completions);
     }
+
+    #[test]
+    fn test_optimal_scheduler () {
+        let mut job_list = job_list_with_ties();
+        let sorted_job_list = JobList(vec![
+            Job { weight: 5, length: 6 },
+            Job { weight: 3, length: 4 },
+            Job { weight: 1, length: 2 }
+        ]);
+        job_list.schedule_jobs_optimal();
+        assert_eq!(job_list, sorted_job_list);
+
+        let mut job_list = job_list_no_ties();
+        let sorted_job_list = JobList(vec![
+            Job { weight: 6, length: 6 },
+            Job { weight: 3, length: 4 },
+            Job { weight: 0, length: 2 }
+        ]);
+        job_list.schedule_jobs_optimal();
+        assert_eq!(job_list, sorted_job_list);
+    }
+
 }
