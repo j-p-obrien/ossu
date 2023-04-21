@@ -10,9 +10,9 @@ type Cost = i32;
 // Edge for an edge list
 #[derive(Debug)]
 pub struct Edge {
-    from: Vertex,
-    to: Vertex,
-    cost: Cost,
+    pub from: Vertex,
+    pub to: Vertex,
+    pub cost: Cost,
 }
 
 // Edge for an adjacency list. Users should not use this struct; it is only an implementation
