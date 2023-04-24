@@ -40,7 +40,7 @@ M = M + D
 
 // Decrement i by 1, and additionally store in D
 @i
-DM = M - 1
+MD = M - 1
 
 // Unconditional jump to END, which will check to see if we continue the loop
 @END
