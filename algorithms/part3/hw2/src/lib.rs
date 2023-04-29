@@ -15,7 +15,7 @@ pub struct Edge {
 
 // An EdgeList. Contains Edges mentioned above.
 #[derive(Debug, PartialEq, Eq)]
-pub struct EdgeList(Vec<Edge>);
+pub struct EdgeList(RefCell<Vec<Edge>>);
 
 #[derive(Debug)]
 pub struct ParseEdgeError;
@@ -28,7 +28,10 @@ impl EdgeList {
         let vertices = self.get_vertices();
         let mut clusters = UnionFind::from(vertices);
 
-        for edge in &self.0 {
+        let mut edges = self.0.borrow_mut();
+        edges.sort_unstable_by_key(|edge| edge.dist);
+
+        for edge in &*edges {
             if clusters.num_clusters > k {
                 clusters.union(edge.from, edge.to)
             } else if clusters.different_clusters(edge) {
@@ -42,6 +45,7 @@ impl EdgeList {
     pub fn get_vertices(&self) -> Vec<Vertex> {
         let v_set = HashSet::new();
         self.0
+            .borrow()
             .iter()
             .fold(v_set, |mut acc, edge| {
                 acc.insert(edge.from);
@@ -76,7 +80,7 @@ impl FromStr for EdgeList {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(edge_data) = s.lines().skip(1).map(|s| Edge::from_str(s)).collect() {
-            return Ok(EdgeList(edge_data));
+            return Ok(EdgeList(RefCell::new(edge_data)));
         }
         Err(ParseEdgeError)
     }
@@ -186,7 +190,7 @@ mod tests {
     use crate::*;
 
     fn setup_edgelist() -> EdgeList {
-        EdgeList(vec![
+        EdgeList(RefCell::new(vec![
             Edge {
                 from: 1,
                 to: 2,
@@ -202,7 +206,7 @@ mod tests {
                 to: 3,
                 dist: 1,
             },
-        ])
+        ]))
     }
 
     fn setup_unionfind() -> UnionFind {
