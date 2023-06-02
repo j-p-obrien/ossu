@@ -101,7 +101,7 @@ impl CodeList {
             while let Some(code) = buckets[i].pop() {
                 clusters.push(find_all_neighbors(code, &mut buckets, spacing));
             }
-            dbg!(clusters.len());
+            //dbg!(clusters.len());
         }
         clusters.len()
     }
@@ -118,9 +118,8 @@ fn find_all_neighbors(code: Code, buckets: &mut Vec<Vec<Code>>, spacing: usize) 
             let bucket = buckets.get_mut(bucket_num);
             let next = take_neighbors_from_bucket(&code, bucket, spacing);
             neighbors.extend_from_slice(&next);
-            dbg!(neighbors.len());
+            //dbg!(neighbors.len());
             todo.extend(next.into_iter());
-            //todo.extend_from_slice(&next)
         }
     }
     neighbors
