@@ -2,7 +2,7 @@ use std::collections::BinaryHeap;
 
 // Tree containing CodeNodes. Since we only care about the length of the codewords, we only need
 // to store the internal nodes of the encoding tree.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HuffmanEncoding {
     codes: Vec<CodeNode>,
 }
@@ -101,5 +101,54 @@ impl HuffmanEncoding {
             }
         }
         (min, max)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::huffman_code::{CodeNode, HuffmanEncoding};
+    use std::vec;
+
+    #[test]
+    fn test_encode() {
+        let weights = vec![1, 2, 4, 5];
+        let encoding = HuffmanEncoding {
+            codes: vec![
+                CodeNode {
+                    left: None,
+                    right: None,
+                },
+                CodeNode {
+                    left: Some(0),
+                    right: None,
+                },
+                CodeNode {
+                    left: None,
+                    right: Some(1),
+                },
+            ],
+        };
+        assert_eq!(encoding, HuffmanEncoding::encode(weights))
+    }
+
+    #[test]
+    fn test_minmax() {
+        let encoding = HuffmanEncoding {
+            codes: vec![
+                CodeNode {
+                    left: None,
+                    right: None,
+                },
+                CodeNode {
+                    left: Some(0),
+                    right: None,
+                },
+                CodeNode {
+                    left: None,
+                    right: Some(1),
+                },
+            ],
+        };
+        assert_eq!(encoding.min_max_length(), (1, 3))
     }
 }
