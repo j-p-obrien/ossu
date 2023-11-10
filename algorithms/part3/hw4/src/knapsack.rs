@@ -1,4 +1,5 @@
 use std::{collections::BinaryHeap, ops::Add};
+
 type Value = usize;
 type Weight = usize;
 
@@ -60,6 +61,7 @@ impl Item {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from(value: usize, weight: usize) -> Self {
         Self { value, weight }
     }
@@ -68,23 +70,21 @@ impl Item {
 impl Knapsack {
     pub fn from(data: &str) -> Self {
         let mut lines = data.lines();
-        let size = lines.next().unwrap().parse().unwrap();
+        let size = lines
+            .next()
+            .unwrap()
+            .split(&" ")
+            .take(1)
+            .map(|s| s.parse().unwrap())
+            .collect::<Vec<_>>()[0];
         let items = lines.map(Item::from_str).collect();
         Self { size, items }
     }
 
     pub fn max_value(&self) -> usize {
-        let n = self.items.len();
-        // results[i] = (total value, weight used)
-        let mut results = vec![vec![]; n + 1];
-        results[0].push(Item {
-            weight: 0,
-            value: 0,
-        });
-        for i in (1..=n) {
-            let item = self.items[i];
-        }
-        todo!()
+        let results = self.create_knapsack_array().pop().unwrap();
+        let highest_value = results.into_iter().max_by_key(|item| item.value).unwrap();
+        highest_value.value
     }
 
     // creates the array of values that contain the total budget used and the values of the
@@ -95,6 +95,7 @@ impl Knapsack {
         array[0].push(Item::default());
         array[0].push(self.items[0]);
         for i in 1..n {
+            dbg!(i);
             array[i] = array[i - 1].clone();
             let mut todo = array[i - 1].clone();
             let current = self.items[i];
@@ -105,6 +106,7 @@ impl Knapsack {
                     break;
                 }
             }
+            dbg!(array[i].len());
         }
         array
     }
@@ -112,7 +114,7 @@ impl Knapsack {
 
 #[cfg(test)]
 mod tests {
-    use std::{cmp::Reverse, collections::BinaryHeap};
+    use std::collections::BinaryHeap;
 
     use super::{Item, Knapsack};
 
@@ -163,6 +165,6 @@ mod tests {
     #[test]
     fn test_max_value() {
         let sack = create_knapsack();
-        assert_eq!(sack.max_value(), 10)
+        assert_eq!(sack.max_value(), 17)
     }
 }
