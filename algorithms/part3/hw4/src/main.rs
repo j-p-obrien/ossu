@@ -1,8 +1,8 @@
 use std::fs;
 
-use crate::knapsack::Knapsack;
-
 mod knapsack;
+
+use knapsack::Knapsack;
 
 fn main() {
     let knapsack_data = fs::read_to_string("knapsack1.txt").unwrap();
