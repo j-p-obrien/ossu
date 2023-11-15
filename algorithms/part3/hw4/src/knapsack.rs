@@ -87,9 +87,28 @@ impl Knapsack {
         highest_value.value
     }
 
+    pub fn max_value2(&self) -> Value {
+        let max_weight = self.size;
+        // at each iteration through the items of the knapsack, current_array[i] is the highest
+        // value knapsack with weight up to and including i.
+        let mut last_array = vec![0; max_weight + 1];
+        let mut i = 0;
+        for item in &self.items {
+            let mut current_array = last_array.clone();
+            dbg!(i);
+            i += 1;
+            for i in item.weight..=max_weight {
+                current_array[i] = last_array[i].max(last_array[i - item.weight] + item.value)
+            }
+            dbg!(&current_array);
+            last_array = current_array;
+        }
+        *last_array.last().unwrap()
+    }
+
     // creates the array of values that contain the total budget used and the values of the
     // knapsack with various items in it.
-    fn create_knapsack_array(&self) -> Vec<BinaryHeap<Item>> {
+    pub fn create_knapsack_array(&self) -> Vec<BinaryHeap<Item>> {
         let n = self.items.len();
         let mut array = vec![BinaryHeap::new(); n];
         array[0].push(Item::default());
@@ -166,5 +185,11 @@ mod tests {
     fn test_max_value() {
         let sack = create_knapsack();
         assert_eq!(sack.max_value(), 17)
+    }
+
+    #[test]
+    fn test_max_value2() {
+        let sack = create_knapsack();
+        assert_eq!(sack.max_value2(), 17)
     }
 }
