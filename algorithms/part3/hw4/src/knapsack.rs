@@ -56,7 +56,7 @@ impl Knapsack {
             //dbg!(&current_array);
             last_array = current_array;
         }
-        *last_array.last().unwrap()
+        last_array.pop().unwrap()
     }
 }
 
