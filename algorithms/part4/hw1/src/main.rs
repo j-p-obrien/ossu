@@ -11,10 +11,7 @@ fn main() {
     let g2_dist = g2.floyd_warshall();
     let g3_dist = g3.floyd_warshall();
 
-    let min_dist = g1_dist
-        .min_dist()
-        .min(&g2_dist.min_dist())
-        .min(&g3_dist.min_dist());
+    let min_dist = g1_dist.min(g2_dist.min(g3_dist));
 
     println!("Minimum distance path has length: {:?}", min_dist)
 }

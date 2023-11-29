@@ -1,3 +1,5 @@
+use std::{cmp::Ordering, ops::Add};
+
 type Vertex = usize;
 type Dist = isize;
 
@@ -23,23 +25,8 @@ pub enum Distance {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct PathDistances(Vec<Vec<Distance>>);
 
-impl Distance {
-    pub fn min(&self, other: &Distance) -> Distance {
-        match (self, other) {
-            (Distance::Infinite, _) => *other,
-            (Distance::Finite(_), Distance::Infinite) => *self,
-            (Distance::Finite(w1), Distance::Finite(w2)) => {
-                if w1 <= w2 {
-                    *self
-                } else {
-                    *other
-                }
-            }
-        }
-    }
-}
-
 impl Edge {
+    // creates an edge from the given string slice
     pub fn from_str(data: &str) -> Self {
         let (head, distance) = data.split_once(" ").unwrap();
         Self {
@@ -50,6 +37,7 @@ impl Edge {
 }
 
 impl Graph {
+    // Creates a graph from the given string slice
     pub fn from_str(data: &str) -> Self {
         let mut graph_data = data.lines();
         // who needs error handling lol
@@ -73,11 +61,14 @@ impl Graph {
         Graph(adjacency_list)
     }
 
+    // Returns number of vertices in graph
     #[inline]
     pub fn len(&self) -> usize {
         self.0.len() - 1
     }
 
+    // Returns a vector of tuples where each tuple is (tail, head, distance) for each edge in the
+    // graph
     pub fn edges(&self) -> Vec<(Vertex, Vertex, Dist)> {
         self.0
             .iter()
@@ -91,20 +82,56 @@ impl Graph {
             .collect()
     }
 
-    // Computes the all pairs shortest paths for the given Graph. Returns Some(PathWeights)
-    // if the graph has no negative cycles. Returns None if there is a negative cycle detected
-    pub fn floyd_warshall(&self) -> PathDistances {
+    // Computes the all pairs shortest paths for the given Graph. Returns Finite(distance) if
+    // There are no negative cycles. Returns Infinite if a negative cycle is detected.
+    pub fn floyd_warshall(&self) -> Distance {
         let mut current = PathDistances::init(self);
-        for v in 1..=self.len() {
+        let n = self.len();
+        for v in 1..=n {
             let last = current;
-            current = last.update_weights(v)
+            current = last.update_distances(v)
         }
-        todo!()
+        current.min_dist()
+    }
+}
+
+impl PartialOrd for Distance {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Distance::Infinite, _) => Some(Ordering::Greater),
+            (Distance::Finite(_), Distance::Infinite) => Some(Ordering::Less),
+            (Distance::Finite(d1), Distance::Finite(d2)) => {
+                if d1 == d2 {
+                    Some(Ordering::Equal)
+                } else if d1 < d2 {
+                    Some(Ordering::Less)
+                } else {
+                    Some(Ordering::Greater)
+                }
+            }
+        }
+    }
+}
+
+impl Ord for Distance {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl Add for Distance {
+    type Output = Distance;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Distance::Finite(left), Distance::Finite(right)) => Distance::Finite(left + right),
+            _ => Distance::Infinite,
+        }
     }
 }
 
 impl PathDistances {
-    // Given graph, initializes the distances between nodes according to Floyd-Warhsall
+    // Given graph, initializes the distances between vertices according to Floyd-Warahall
     fn init(graph: &Graph) -> Self {
         let n = graph.len();
         let mut weight_data = vec![vec![Distance::Infinite; n + 1]; n + 1];
@@ -118,20 +145,37 @@ impl PathDistances {
         Self(weight_data)
     }
 
-    fn new(n: Vertex) -> Self {
-        let mut weight_data = vec![vec![Distance::Infinite; n + 1]; n + 1];
-        PathDistances(weight_data)
+    #[inline]
+    fn len(&self) -> usize {
+        self.0.len() - 1
     }
 
     // Given new_vertex, updates shortest path distances to now include paths with interior node
     // new_vertex
-    fn update_weights(&self, new_vertex: Vertex) -> PathDistances {
-        todo!()
+    fn update_distances(&self, new_vertex: Vertex) -> PathDistances {
+        let mut new = self.clone();
+        let n = self.len();
+        for i in 1..=n {
+            for j in 1..=n {
+                new.0[i][j] = self.0[i][j].min(self.0[i][new_vertex] + self.0[new_vertex][j])
+            }
+        }
+        new
+    }
+
+    fn detect_neg_cycle(&self) -> bool {
+        (1..=self.len())
+            .into_iter()
+            .any(|v| self.0[v][v] < Distance::Finite(0))
     }
 
     // Computes the distance of the minimum distance path.
     pub fn min_dist(&self) -> Distance {
-        todo!()
+        if self.detect_neg_cycle() {
+            Distance::Infinite
+        } else {
+            *self.0.iter().flatten().min().unwrap()
+        }
     }
 }
 
@@ -259,5 +303,15 @@ mod tests {
     #[test]
     fn test_weight_init_cycle() {
         assert_eq!(PathDistances::init(&negcycle_graph()), weight_init_cycle())
+    }
+
+    #[test]
+    fn test_floyd_warshall() {
+        assert_eq!(graph().floyd_warshall(), Distance::Finite(-1))
+    }
+
+    #[test]
+    fn test_floyd_warshall_cycle() {
+        assert_eq!(negcycle_graph().floyd_warshall(), Distance::Infinite)
     }
 }
