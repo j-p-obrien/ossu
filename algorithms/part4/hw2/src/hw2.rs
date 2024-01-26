@@ -1,4 +1,6 @@
 type Coord = f32;
+type CityID = usize;
+type SubsetID = usize;
 
 // City coordinates
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -8,14 +10,15 @@ struct City(Coord, Coord);
 #[derive(Debug)]
 pub struct Cities(Vec<City>);
 
-// Denotes membership in a subset using bitwise operations. i.e. if item 1 is contained in the
-// subset but nothing else is the value of the usize is 0b10
+// Denotes membership in a subset bitwise. i.e. if item 1 is contained in the subset but nothing
+// else is the value of the usize is 0b10
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Subset(usize);
+struct Subset(SubsetID);
 
+// Contains a Vec of CityID's and the corresponding subset representation
 #[derive(PartialEq, Eq, Debug)]
 struct CitySubset {
-    ids: Vec<usize>,
+    ids: Vec<CityID>,
     subset: Subset,
 }
 
@@ -26,22 +29,25 @@ struct CitySubset {
 #[derive(Debug)]
 struct SubsetIterator {
     n: usize,
-    ids: Vec<usize>,
+    ids: Vec<CityID>,
     finished: bool,
 }
 
 impl City {
+    // Constructs a City from the given &str
     fn from_str(data: &str) -> Self {
         let (x, y) = data.split_once(" ").unwrap();
         City(x.parse().unwrap(), y.parse().unwrap())
     }
 
+    // Computes the Euclidean distance between two Cities
     fn dist(&self, other: &Self) -> Coord {
         ((self.0 - other.0).powi(2) + (self.1 - other.1).powi(2)).sqrt()
     }
 }
 
 impl Cities {
+    // Constructs a Cities struct from the given &str
     pub fn from_str(data: &str) -> Self {
         Cities(data.lines().skip(1).map(City::from_str).collect())
     }
@@ -77,7 +83,7 @@ impl Cities {
 impl Subset {
     // Turns list of city id's into corresponding usize representation.
     /// assert_eq!(Subset(0b101), Subset::from_ids(vec![0, 2]))
-    fn from_ids(ids: &[usize]) -> Self {
+    fn from_ids(ids: &[CityID]) -> Self {
         let mut subset = 0;
         for &id in ids {
             subset |= 1 << id
@@ -89,36 +95,73 @@ impl Subset {
     // responsible.
     // We could have also done:
     // Subset(self.0 & !(1 << id))
-    fn remove(&self, id: usize) -> Self {
+    fn remove(&self, id: CityID) -> Self {
         Subset(self.0 ^ (1 << id))
     }
 
-    fn id(&self) -> usize {
+    fn id(&self) -> SubsetID {
         self.0
     }
 }
 
 impl CitySubset {
-    fn from_ids(ids: &Vec<usize>) -> Self {
+    // Takes a Vec of CityID's and returns a CitySubset corresponding to those ID's
+    fn from_ids(ids: &Vec<CityID>) -> Self {
         Self {
             ids: ids.clone(),
             subset: Subset::from_ids(ids),
         }
     }
 
+    // For each city in the CitySubset, computes the shortest path that ends at the given city
+    // visiting each city in the subset exactly once.
     fn update_array(&self, dp_array: &mut [Vec<Coord>], cities: &[City]) {
-        let current = self.subset;
-        for &id in &self.ids {
-            let city = cities[id];
-            let previous = current.remove(id).id();
-            dp_array[current.id()][id] = self.ids.iter().filter(|&&other_id| other_id != id).fold(
-                Coord::INFINITY,
-                |accum, &other_id| {
-                    accum.min(dp_array[previous][other_id] + city.dist(&cities[other_id]))
-                },
-            );
-        }
+        let sub_id = self.subset.id();
+        self.all_ids()
+            .for_each(|&id| dp_array[sub_id][id] = self.min_dist_to(id, dp_array, cities))
     }
+    /*
+    fn update_array3(&self, dp_array: &mut [Vec<Coord>], cities: &[City]) {
+        let sub_id = self.subset.id();
+        self.all_ids().for_each(|&id| {
+            let prev_sub = self.subset.remove(id);
+            let dest = cities[id];
+            dp_array[sub_id][id] = self.min_dist_to2(&prev_sub, dest, dp_array, cities)
+        })
+    }
+    */
+
+    // Returns an iterator over all CityID's in the CitySubset.
+    fn all_ids(&self) -> impl Iterator<Item = &CityID> {
+        self.ids.iter()
+    }
+
+    // Returns an iterator over all CityID's in the CitySubset except for the given CityID.
+    fn all_ids_except(&self, id: CityID) -> impl Iterator<Item = &CityID> {
+        self.all_ids().filter(move |&&other| other != id)
+    }
+
+    // Computes the min distance to the given CityID that visits each City in the CitySubset
+    // exactly once.
+    fn min_dist_to(&self, id: usize, dp_array: &mut [Vec<Coord>], cities: &[City]) -> Coord {
+        let dest = cities[id];
+        let prev_sub = self.subset.remove(id).id();
+        self.all_ids_except(id)
+            .fold(Coord::INFINITY, |accum, &other_id| {
+                accum.min(dp_array[prev_sub][other_id] + dest.dist(&cities[other_id]))
+            })
+    }
+    /*
+    fn min_dist_to2(
+        &self,
+        from: &CitySubset,
+        to: &City,
+        dp_array: &mut [Vec<Coord>],
+        cities: &[City],
+    ) -> Coord {
+        todo!()
+    }
+    */
 }
 
 // end[i] = n - subset_size + i
