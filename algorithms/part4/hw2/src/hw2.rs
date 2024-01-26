@@ -13,19 +13,21 @@ pub struct Cities(Vec<City>);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Subset(usize);
 
-#[derive(Debug, Clone, Copy)]
-struct IterState {
-    current: usize,
-    end: usize,
+#[derive(PartialEq, Eq, Debug)]
+struct CitySubset {
+    ids: Vec<usize>,
+    subset: Subset,
 }
 
-// Used to iterate over all subsets of size subset_size out of n total possible members.
-// We will denote membership bitwise, where a city i in Cities corresponds to bit i in current.
-// We will use the value of current as an index in a DP array to solve the TSP.
+// Used to iterate over all subsets of size subset_size out of n possible members. Subsets are
+// returned as a Vec of indices.
+// Generators in rust are kinda awkward, I would need another struct in order to avoid cloning
+// the interior state. maybe fix in future? (prob not)
 #[derive(Debug)]
 struct SubsetIterator {
     n: usize,
-    state: Vec<IterState>,
+    ids: Vec<usize>,
+    finished: bool,
 }
 
 impl City {
@@ -45,24 +47,77 @@ impl Cities {
     }
 
     // Computes the shortest tour of all the Cities i.e. solves the Traveling Salesman Problem
-    pub fn tsp(&self) -> f32 {
-        // Arbitrarily choose last city as starting point.
-        let mut cities = self.0.clone();
-        let source = cities.pop().unwrap();
+    pub fn tsp(&self) -> Coord {
+        // Arbitrarily choose first city as starting point.
+        let source = &self.0[0];
+        let cities = &self.0[1..];
         let n = cities.len();
+        let mut dp_array = vec![vec![Coord::INFINITY; n]; (2_usize).pow(n as u32)];
+        // base case
+        for city_sub in SubsetIterator::all_subsets(n, 1) {
+            dp_array[city_sub.subset.id()][city_sub.ids[0]] = source.dist(&cities[city_sub.ids[0]]);
+        }
         // Iterate over subset sizes
-        for m in 0..n {}
-        todo!()
+        for subset_size in 2..=n {
+            for city_sub in SubsetIterator::all_subsets(n, subset_size) {
+                city_sub.update_array(&mut dp_array, cities)
+            }
+        }
+        let mut smallest_dist = Coord::INFINITY;
+        for CitySubset { ids, subset } in SubsetIterator::all_subsets(n, n) {
+            for id in ids {
+                smallest_dist =
+                    smallest_dist.min(dp_array[subset.id()][id] + source.dist(&cities[id]))
+            }
+        }
+        smallest_dist
     }
 }
 
 impl Subset {
-    fn from_indices(indices: &[usize]) -> Self {
+    // Turns list of city id's into corresponding usize representation.
+    /// assert_eq!(Subset(0b101), Subset::from_ids(vec![0, 2]))
+    fn from_ids(ids: &[usize]) -> Self {
         let mut subset = 0;
-        for i in indices {
-            subset |= 1 << *i
+        for &id in ids {
+            subset |= 1 << id
         }
         Self(subset)
+    }
+
+    // Technically this just changes membership but it is ok for our purposes, I promise to be
+    // responsible.
+    // We could have also done:
+    // Subset(self.0 & !(1 << id))
+    fn remove(&self, id: usize) -> Self {
+        Subset(self.0 ^ (1 << id))
+    }
+
+    fn id(&self) -> usize {
+        self.0
+    }
+}
+
+impl CitySubset {
+    fn from_ids(ids: &Vec<usize>) -> Self {
+        Self {
+            ids: ids.clone(),
+            subset: Subset::from_ids(ids),
+        }
+    }
+
+    fn update_array(&self, dp_array: &mut [Vec<Coord>], cities: &[City]) {
+        let current = self.subset;
+        for &id in &self.ids {
+            let city = cities[id];
+            let previous = current.remove(id).id();
+            dp_array[current.id()][id] = self.ids.iter().filter(|&&other_id| other_id != id).fold(
+                Coord::INFINITY,
+                |accum, &other_id| {
+                    accum.min(dp_array[previous][other_id] + city.dist(&cities[other_id]))
+                },
+            );
+        }
     }
 }
 
@@ -70,53 +125,45 @@ impl Subset {
 impl SubsetIterator {
     fn all_subsets(n: usize, subset_size: usize) -> Self {
         assert!(subset_size <= n);
-        let state = (0..subset_size)
-            .map(|i| IterState {
-                current: i,
-                end: n - subset_size + i,
-            })
-            .collect();
-        Self { n, state }
-    }
-
-    fn next_state(&mut self, i: isize) {
-        //hacky lol
-        if i < 0 {
-            self.state[0].current += 1;
-            return ();
-        }
-        let index = i as usize;
-        self.state[index].current += 1;
-        for i in (index + 1)..self.state.len() {
-            self.state[i].current = self.state[i - 1].current + 1;
+        let ids = (0..subset_size).collect();
+        Self {
+            n,
+            ids,
+            finished: false,
         }
     }
 
-    fn iter_return(&self) -> (Subset, Vec<usize>) {
-        let indices: Vec<_> = self.state.iter().map(|s| s.current).collect();
-        (Subset::from_indices(&indices), indices)
+    // Increments member at given index and resets all members after the given index
+    fn increment(&mut self, i: usize) {
+        self.ids[i] += 1;
+        for j in (i + 1)..self.ids.len() {
+            self.ids[j] = self.ids[j - 1] + 1
+        }
+    }
+
+    // Returns true if the member given by index i is not in its final position.
+    fn is_incrementable(&self, i: usize) -> bool {
+        self.ids[i] < self.n - self.ids.len() + i
     }
 }
 
 // Iterate over all subsets
 impl Iterator for SubsetIterator {
-    type Item = (Subset, Vec<usize>);
+    type Item = CitySubset;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.state[0].current > self.state[0].end {
+        if self.finished {
             return None;
         }
-        let return_val = Some(self.iter_return());
+        let return_val = Some(CitySubset::from_ids(&self.ids));
         // Find next member that hasn't rolled over
-        let mut i = self.state.len() as isize - 1;
-        while i >= 0 {
-            if self.state[i as usize].current == self.state[i as usize].end {
-                i -= 1;
-            } else {
-                break;
-            }
-        }
-        self.next_state(i);
+        match (0..self.ids.len())
+            .rev()
+            .find(|&i| self.is_incrementable(i))
+        {
+            Some(i) => self.increment(i),
+            None => self.finished = true,
+        };
         return_val
     }
 }
@@ -127,24 +174,35 @@ mod tests {
 
     #[test]
     fn test_subset_iteration1() {
-        let (len, subset_size) = (3, 1);
-        let mut sub_iter = SubsetIterator::all_subsets(len, subset_size);
-        assert_eq!(sub_iter.next(), Some((Subset(0b_001), vec![0])));
-        assert_eq!(sub_iter.next(), Some((Subset(0b_010), vec![1])));
-        assert_eq!(sub_iter.next(), Some((Subset(0b_100), vec![2])));
+        let (n, subset_size) = (3, 1);
+        let mut sub_iter = SubsetIterator::all_subsets(n, subset_size);
+        assert_eq!(sub_iter.next(), Some(CitySubset::from_ids(&vec![0])));
+        assert_eq!(sub_iter.next(), Some(CitySubset::from_ids(&vec![1])));
+        assert_eq!(sub_iter.next(), Some(CitySubset::from_ids(&vec![2])));
         assert_eq!(sub_iter.next(), None);
     }
 
     #[test]
     fn test_subset_iteration2() {
-        let (len, subset_size) = (4, 2);
-        let mut sub_iter = SubsetIterator::all_subsets(len, subset_size);
-        assert_eq!(sub_iter.next(), Some((Subset(0b_0011), vec![0, 1])));
-        assert_eq!(sub_iter.next(), Some((Subset(0b_0101), vec![0, 2])));
-        assert_eq!(sub_iter.next(), Some((Subset(0b_1001), vec![0, 3])));
-        assert_eq!(sub_iter.next(), Some((Subset(0b_0110), vec![1, 2])));
-        assert_eq!(sub_iter.next(), Some((Subset(0b_1010), vec![1, 3])));
-        assert_eq!(sub_iter.next(), Some((Subset(0b_1100), vec![2, 3])));
+        let (n, subset_size) = (4, 2);
+        let mut sub_iter = SubsetIterator::all_subsets(n, subset_size);
+        assert_eq!(sub_iter.next(), Some(CitySubset::from_ids(&vec![0, 1])));
+        assert_eq!(sub_iter.next(), Some(CitySubset::from_ids(&vec![0, 2])));
+        assert_eq!(sub_iter.next(), Some(CitySubset::from_ids(&vec![0, 3])));
+        assert_eq!(sub_iter.next(), Some(CitySubset::from_ids(&vec![1, 2])));
+        assert_eq!(sub_iter.next(), Some(CitySubset::from_ids(&vec![1, 3])));
+        assert_eq!(sub_iter.next(), Some(CitySubset::from_ids(&vec![2, 3])));
+        assert_eq!(sub_iter.next(), None);
+    }
+
+    #[test]
+    fn test_subset_iteration3() {
+        let (n, subset_size) = (5, 5);
+        let mut sub_iter = SubsetIterator::all_subsets(n, subset_size);
+        assert_eq!(
+            sub_iter.next(),
+            Some(CitySubset::from_ids(&vec![0, 1, 2, 3, 4]))
+        );
         assert_eq!(sub_iter.next(), None);
     }
 }
