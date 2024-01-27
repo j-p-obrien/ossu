@@ -13,11 +13,4 @@ fn main() {
     let duration = end.duration_since(start).unwrap();
     println!("it took {} seconds", duration.as_secs());
     println!("The shortest path through all cities is: {shortest_path}");
-
-    let start = SystemTime::now();
-    let shortest_path = cities.tsp2().floor();
-    let end = SystemTime::now();
-    let duration = end.duration_since(start).unwrap();
-    println!("it took {} seconds", duration.as_secs());
-    println!("The shortest path through all cities is: {shortest_path}");
 }
