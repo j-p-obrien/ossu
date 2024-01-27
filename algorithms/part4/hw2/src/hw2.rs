@@ -60,8 +60,8 @@ impl Cities {
         let n = cities.len();
         let mut dp_array = vec![vec![Coord::INFINITY; n]; (2_usize).pow(n as u32)];
         // base case
-        for city_sub in SubsetIterator::all_subsets(n, 1) {
-            dp_array[city_sub.subset.id()][city_sub.ids[0]] = source.dist(&cities[city_sub.ids[0]]);
+        for CitySubset { ids, subset } in SubsetIterator::all_subsets(n, 1) {
+            dp_array[subset.id()][ids[0]] = source.dist(&cities[ids[0]]);
         }
         // Iterate over subset sizes
         for subset_size in 2..=n {
@@ -77,6 +77,32 @@ impl Cities {
             }
         }
         smallest_dist
+    }
+
+    // Computes the shortest tour of all the Cities i.e. solves the Traveling Salesman Problem
+    pub fn tsp2(&self) -> Coord {
+        // Arbitrarily choose first city as starting point.
+        let source = &self.0[0];
+        let cities = &self.0[1..];
+        let n = cities.len();
+        let mut dp_array = vec![vec![Coord::INFINITY; n]; (2_usize).pow(n as u32)];
+        // base case
+        SubsetIterator::all_subsets(n, 1).for_each(|CitySubset { ids, subset }| {
+            dp_array[subset.id()][ids[0]] = source.dist(&cities[ids[0]])
+        });
+        // Iterate over subset sizes
+        (2..=n).into_iter().for_each(|subset_size| {
+            SubsetIterator::all_subsets(n, subset_size)
+                .for_each(|city_sub| city_sub.update_array2(&mut dp_array, cities))
+        });
+
+        let all_cities = CitySubset::from_ids(&(0..n).collect());
+        all_cities.min_dist_to2(
+            &source,
+            all_cities.all_ids(),
+            &dp_array[all_cities.subset.id()],
+            &cities,
+        )
     }
 }
 
@@ -113,24 +139,6 @@ impl CitySubset {
         }
     }
 
-    // For each city in the CitySubset, computes the shortest path that ends at the given city
-    // visiting each city in the subset exactly once.
-    fn update_array(&self, dp_array: &mut [Vec<Coord>], cities: &[City]) {
-        let sub_id = self.subset.id();
-        self.all_ids()
-            .for_each(|&id| dp_array[sub_id][id] = self.min_dist_to(id, dp_array, cities))
-    }
-    /*
-    fn update_array3(&self, dp_array: &mut [Vec<Coord>], cities: &[City]) {
-        let sub_id = self.subset.id();
-        self.all_ids().for_each(|&id| {
-            let prev_sub = self.subset.remove(id);
-            let dest = cities[id];
-            dp_array[sub_id][id] = self.min_dist_to2(&prev_sub, dest, dp_array, cities)
-        })
-    }
-    */
-
     // Returns an iterator over all CityID's in the CitySubset.
     fn all_ids(&self) -> impl Iterator<Item = &CityID> {
         self.ids.iter()
@@ -151,17 +159,44 @@ impl CitySubset {
                 accum.min(dp_array[prev_sub][other_id] + dest.dist(&cities[other_id]))
             })
     }
-    /*
-    fn min_dist_to2(
+
+    // Computes the distance to to from all CityID's returned by the iterator from
+    fn min_dist_to2<'a, I>(
         &self,
-        from: &CitySubset,
         to: &City,
-        dp_array: &mut [Vec<Coord>],
+        from: I,
+        distances: &Vec<Coord>,
         cities: &[City],
-    ) -> Coord {
-        todo!()
+    ) -> Coord
+    where
+        I: Iterator<Item = &'a CityID>,
+    {
+        from.fold(Coord::INFINITY, |accum, id| {
+            accum.min(distances[*id] + cities[*id].dist(&to))
+        })
     }
-    */
+
+    // For each city in the CitySubset, computes the shortest path that ends at the given city
+    // visiting each city in the subset exactly once.
+    fn update_array(&self, dp_array: &mut [Vec<Coord>], cities: &[City]) {
+        let sub_id = self.subset.id();
+        self.all_ids()
+            .for_each(|&id| dp_array[sub_id][id] = self.min_dist_to(id, dp_array, cities))
+    }
+
+    // For each city in the CitySubset, computes the shortest path that ends at the given city
+    // visiting each city in the subset exactly once.
+    fn update_array2(&self, dp_array: &mut [Vec<Coord>], cities: &[City]) {
+        let sub = self.subset;
+        self.all_ids().for_each(|&id| {
+            dp_array[sub.id()][id] = self.min_dist_to2(
+                &cities[id],
+                self.all_ids_except(id),
+                &dp_array[sub.remove(id).id()],
+                cities,
+            )
+        });
+    }
 }
 
 // end[i] = n - subset_size + i
