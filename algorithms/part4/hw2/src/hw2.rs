@@ -3,11 +3,9 @@ type CityID = usize;
 type SubsetID = usize;
 
 // City coordinates
-#[derive(Debug, Clone, Copy, PartialEq)]
 struct City(Coord, Coord);
 
 // City container
-#[derive(Debug)]
 pub struct Cities(Vec<City>);
 
 // Denotes membership in a subset bitwise. i.e. if item 1 is contained in the subset but nothing
@@ -15,7 +13,8 @@ pub struct Cities(Vec<City>);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Subset(SubsetID);
 
-// Contains a Vec of CityID's and the corresponding subset representation
+// Contains a Vec of CityID's and the corresponding subset representation. We could get away
+// with either/or but do it this way for performance reasons
 #[derive(PartialEq, Eq, Debug)]
 struct CitySubset {
     ids: Vec<CityID>,
@@ -33,6 +32,9 @@ struct SubsetIterator {
     finished: bool,
 }
 
+// Holds the results for the DP algorithm. First slot is indexed with a Subset. Second is indexed
+// by a CityID in the subset. Values are the minimum path length ending in the specified CityID,
+// with each city in the subset visited exactly once.
 struct ResultsArray(Vec<Vec<Coord>>);
 
 impl City {
@@ -184,12 +186,12 @@ impl ResultsArray {
         });
     }
 
-    fn min_dist_to<'a, I>(&self, to: &City, from: I, prev_sub: Subset, cities: &[City]) -> f32
+    fn min_dist_to<'a, I>(&self, to: &City, from: I, city_sub: Subset, cities: &[City]) -> f32
     where
-        I: Iterator<Item = &'a usize>,
+        I: Iterator<Item = &'a CityID>,
     {
         from.fold(Coord::INFINITY, |accum, &id| {
-            accum.min(self.0[prev_sub.id()][id] + cities[id].dist(to))
+            accum.min(self.0[city_sub.id()][id] + cities[id].dist(to))
         })
     }
 }
